@@ -1,136 +1,226 @@
-def parse_transactions(raw_lines):
+def calculate_total_revenue(transactions):
     """
-    Parses raw lines into clean list of dictionaries
-
-    Returns: list of dictionaries with keys:
-    ['TransactionID', 'Date', 'ProductID', 'ProductName',
-     'Quantity', 'UnitPrice', 'CustomerID', 'Region']
+    Task 2.1 (a)
+    Calculates total revenue from all transactions
     """
-
-    transactions = []
-
-    for line in raw_lines:
-        parts = line.split('|')
-
-        # Skip rows with incorrect number of fields
-        if len(parts) != 8:
-            continue
-
-        try:
-            transaction_id = parts[0]
-            date = parts[1]
-            product_id = parts[2]
-
-            # Remove commas from ProductName
-            product_name = parts[3].replace(',', '').strip()
-
-            # Remove commas and convert numeric fields
-            quantity = int(parts[4].replace(',', '').strip())
-            unit_price = float(parts[5].replace(',', '').strip())
-
-            customer_id = parts[6]
-            region = parts[7]
-
-            transactions.append({
-                'TransactionID': transaction_id,
-                'Date': date,
-                'ProductID': product_id,
-                'ProductName': product_name,
-                'Quantity': quantity,
-                'UnitPrice': unit_price,
-                'CustomerID': customer_id,
-                'Region': region
-            })
-
-        except ValueError:
-            # Skip rows with conversion errors
-            continue
-
-    return transactions
-
-
-# Data Validation and Filtering
-def validate_and_filter(transactions, region=None, min_amount=None, max_amount=None):
-    """
-    Validates transactions and applies optional filters
-
-    Returns:
-    (valid_transactions, invalid_count, filter_summary)
-    """
-
-    total_input = len(transactions)
-    invalid_count = 0
-    valid_transactions = []
-
-    # Validation 
+    total = 0.0
     for tx in transactions:
-        try:
-            if tx['Quantity'] <= 0:
-                raise ValueError
-            if tx['UnitPrice'] <= 0:
-                raise ValueError
-            if not tx['TransactionID'].startswith('T'):
-                raise ValueError
-            if not tx['ProductID'].startswith('P'):
-                raise ValueError
-            if not tx['CustomerID'].startswith('C'):
-                raise ValueError
-            if not tx['Region']:
-                raise ValueError
+        total += tx['Quantity'] * tx['UnitPrice']
+    return total
 
-            valid_transactions.append(tx)
 
-        except Exception:
-            invalid_count += 1
+def region_wise_sales(transactions):
+    """
+    Task 2.1 (b)
+    Analyzes sales by region
+    """
 
-    # Display available regions 
-    regions = sorted({tx['Region'] for tx in valid_transactions})
-    print("Available Regions:", regions)
+    region_data = {}
+    total_revenue = calculate_total_revenue(transactions)
 
-    # Display transaction amount
-    amounts = [tx['Quantity'] * tx['UnitPrice'] for tx in valid_transactions]
-    min_tx_amount = min(amounts)
-    max_tx_amount = max(amounts)
-    print(f"Transaction Amount Range: {min_tx_amount} - {max_tx_amount}")
+    for tx in transactions:
+        region = tx['Region']
+        revenue = tx['Quantity'] * tx['UnitPrice']
 
-    filtered_by_region = 0
-    filtered_by_amount = 0
+        if region not in region_data:
+            region_data[region] = {
+                'total_sales': 0.0,
+                'transaction_count': 0
+            }
 
-    # Region
-    if region:
-        before = len(valid_transactions)
-        valid_transactions = [
-            tx for tx in valid_transactions if tx['Region'] == region
-        ]
-        filtered_by_region = before - len(valid_transactions)
-        print(f"Records after region filter: {len(valid_transactions)}")
+        region_data[region]['total_sales'] += revenue
+        region_data[region]['transaction_count'] += 1
 
-    # Amount 
-    if min_amount is not None or max_amount is not None:
-        before = len(valid_transactions)
-        filtered = []
+    # Add percentage and sort by total_sales desc
+    sorted_regions = sorted(
+        region_data.items(),
+        key=lambda x: x[1]['total_sales'],
+        reverse=True
+    )
 
-        for tx in valid_transactions:
-            amount = tx['Quantity'] * tx['UnitPrice']
+    result = {}
+    for region, data in sorted_regions:
+        percentage = (data['total_sales'] / total_revenue) * 100 if total_revenue else 0
+        result[region] = {
+            'total_sales': data['total_sales'],
+            'transaction_count': data['transaction_count'],
+            'percentage': round(percentage, 2)
+        }
 
-            if min_amount is not None and amount < min_amount:
-                continue
-            if max_amount is not None and amount > max_amount:
-                continue
+    return result
 
-            filtered.append(tx)
 
-        valid_transactions = filtered
-        filtered_by_amount = before - len(valid_transactions)
-        print(f"Records after amount filter: {len(valid_transactions)}")
+def top_selling_products(transactions, n=5):
+    """
+    Task 2.1 (c)
+    Finds top n products by total quantity sold
+    """
 
-    filter_summary = {
-        'total_input': total_input,
-        'invalid': invalid_count,
-        'filtered_by_region': filtered_by_region,
-        'filtered_by_amount': filtered_by_amount,
-        'final_count': len(valid_transactions)
-    }
+    product_data = {}
 
-    return valid_transactions, invalid_count, filter_summary
+    for tx in transactions:
+        name = tx['ProductName']
+        qty = tx['Quantity']
+        revenue = qty * tx['UnitPrice']
 
+        if name not in product_data:
+            product_data[name] = {
+                'quantity': 0,
+                'revenue': 0.0
+            }
+
+        product_data[name]['quantity'] += qty
+        product_data[name]['revenue'] += revenue
+
+    sorted_products = sorted(
+        product_data.items(),
+        key=lambda x: x[1]['quantity'],
+        reverse=True
+    )
+
+    result = []
+    for name, data in sorted_products[:n]:
+        result.append((name, data['quantity'], data['revenue']))
+
+    return result
+
+
+def customer_analysis(transactions):
+    """
+    Task 2.1 (d)
+    Analyzes customer purchase patterns
+    """
+
+    customer_data = {}
+
+    for tx in transactions:
+        cid = tx['CustomerID']
+        revenue = tx['Quantity'] * tx['UnitPrice']
+        product = tx['ProductName']
+
+        if cid not in customer_data:
+            customer_data[cid] = {
+                'total_spent': 0.0,
+                'purchase_count': 0,
+                'products': set()
+            }
+
+        customer_data[cid]['total_spent'] += revenue
+        customer_data[cid]['purchase_count'] += 1
+        customer_data[cid]['products'].add(product)
+
+    sorted_customers = sorted(
+        customer_data.items(),
+        key=lambda x: x[1]['total_spent'],
+        reverse=True
+    )
+
+    result = {}
+    for cid, data in sorted_customers:
+        avg_order = data['total_spent'] / data['purchase_count']
+        result[cid] = {
+            'total_spent': data['total_spent'],
+            'purchase_count': data['purchase_count'],
+            'avg_order_value': round(avg_order, 2),
+            'products_bought': list(data['products'])
+        }
+
+    return result
+
+
+def daily_sales_trend(transactions):
+    """
+    Task 2.2 (a)
+    Analyzes sales trends by date
+    """
+
+    daily_data = {}
+
+    for tx in transactions:
+        date = tx['Date']
+        revenue = tx['Quantity'] * tx['UnitPrice']
+        customer = tx['CustomerID']
+
+        if date not in daily_data:
+            daily_data[date] = {
+                'revenue': 0.0,
+                'transaction_count': 0,
+                'customers': set()
+            }
+
+        daily_data[date]['revenue'] += revenue
+        daily_data[date]['transaction_count'] += 1
+        daily_data[date]['customers'].add(customer)
+
+    result = {}
+    for date in sorted(daily_data.keys()):
+        result[date] = {
+            'revenue': daily_data[date]['revenue'],
+            'transaction_count': daily_data[date]['transaction_count'],
+            'unique_customers': len(daily_data[date]['customers'])
+        }
+
+    return result
+
+
+def find_peak_sales_day(transactions):
+    """
+    Task 2.2 (b)
+    Identifies the date with highest revenue
+    """
+
+    daily_data = {}
+
+    for tx in transactions:
+        date = tx['Date']
+        revenue = tx['Quantity'] * tx['UnitPrice']
+
+        if date not in daily_data:
+            daily_data[date] = {
+                'revenue': 0.0,
+                'transaction_count': 0
+            }
+
+        daily_data[date]['revenue'] += revenue
+        daily_data[date]['transaction_count'] += 1
+
+    peak_date = max(daily_data.items(), key=lambda x: x[1]['revenue'])
+
+    return (
+        peak_date[0],
+        peak_date[1]['revenue'],
+        peak_date[1]['transaction_count']
+    )
+
+
+def low_performing_products(transactions, threshold=10):
+    """
+    Task 2.3 (a)
+    Identifies products with low sales
+    """
+
+    product_data = {}
+
+    for tx in transactions:
+        name = tx['ProductName']
+        qty = tx['Quantity']
+        revenue = qty * tx['UnitPrice']
+
+        if name not in product_data:
+            product_data[name] = {
+                'quantity': 0,
+                'revenue': 0.0
+            }
+
+        product_data[name]['quantity'] += qty
+        product_data[name]['revenue'] += revenue
+
+    low_products = [
+        (name, data['quantity'], data['revenue'])
+        for name, data in product_data.items()
+        if data['quantity'] < threshold
+    ]
+
+    low_products.sort(key=lambda x: x[1])
+
+    return low_products
